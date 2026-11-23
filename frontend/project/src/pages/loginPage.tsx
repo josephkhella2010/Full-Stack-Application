@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../firebaseConfig";
+import { auth } from "../FirebaseConfig/firebaseConfig";
 
 function LoginPage() {
   const [email, setEmail] = useState("");
@@ -21,6 +21,12 @@ function LoginPage() {
 
       // Get Firebase ID token
       const token = await userCredential.user.getIdToken();
+      // Get logged-in user
+      const user = userCredential.user;
+
+      // Print user information
+      console.log("User:", user.email);
+      console.log("User:", user.uid);
 
       // Print token in browser console
       console.log("Firebase ID Token:", token);
