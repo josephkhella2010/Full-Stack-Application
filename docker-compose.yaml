@@ -1,0 +1,81 @@
+services:
+  frontend:
+    build:
+      context: ./frontend/project
+      dockerfile: Dockerfile
+    container_name: frontend
+    ports:
+      - "3012:3012"
+    volumes:
+      - ./frontend/project:/app
+      - frontend_volum_project:/app/node_modules
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backend
+    ports:
+      - "5020:5020"
+    env_file:
+      - ./backend/.env
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      PORT: "5020"
+      DB_HOST: db
+      DB_PORT: "5432"
+    volumes:
+      - ./backend:/app
+      - backend_volum_project:/app/node_modules
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:17-alpine
+    container_name: project_db
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - project_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: project_pgadmin
+    ports:
+      - "${PGADMIN_PORT}:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - db
+    restart: unless-stopped
+
+volumes:
+  frontend_volum_project:
+    name: frontend_volum_one_project
+
+  backend_volum_project:
+    name: backend_volum_two_project
+
+  project_db:
+    name: project_db
+
+  pgadmin_data:
+    name: project_pgadmin_data

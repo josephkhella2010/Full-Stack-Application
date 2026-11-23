@@ -1,0 +1,896 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Quiz app backend - API Gateway HTTP API, Lambda functions and DynamoDB
+
+# Deployment-specific settings. NoEcho prevents CloudFormation from displaying
+# the provided secrets in its normal parameter output.
+Parameters:
+  # The stage name is part of the deployed API URL.
+  Stage:
+    Type: String
+    Default: prod
+    AllowedPattern: "[a-z0-9-]+"
+  # Browsers may call the API from this single frontend origin.
+  AllowedOrigin:
+    Type: String
+    Default: http://localhost:3000
+    Description: Frontend origin allowed by CORS
+  # Used for application-issued login tokens; provide a secret at deployment.
+  JwtSecret:
+    Type: String
+    NoEcho: true
+    MinLength: 32
+    Description: HS256 secret used to sign tokens issued by /api/login
+  # Enables verification against the Supabase project's remote public keys.
+  SupabaseUrl:
+    Type: String
+    Default: ""
+    Description: Supabase project URL (used to fetch the JWKS for Supabase tokens)
+  # Optional shared secret for projects issuing legacy HS256 tokens.
+  SupabaseJwtSecret:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Optional legacy Supabase HS256 JWT secret
+  # Override the architecture and timeout for local emulation if necessary.
+  FunctionArchitecture:
+    Type: String
+    Default: arm64
+    AllowedValues: [arm64, x86_64]
+  FunctionTimeout:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    MaxValue: 900
+
+# All handlers share the bundled code, runtime, configuration and table names.
+# SAM Local overrides selected environment variables for its local database.
+Globals:
+  Function:
+    Runtime: nodejs22.x
+    Architectures: [!Ref FunctionArchitecture]
+    MemorySize: 256
+    Timeout: !Ref FunctionTimeout
+    # npm run build produces the handler modules in this shared directory.
+    CodeUri: dist/
+    Environment:
+      Variables:
+        USERS_TABLE: !Ref UsersTable
+        GROUPS_TABLE: !Ref GroupsTable
+        MEMBERS_TABLE: !Ref GroupMembersTable
+        QUIZZES_TABLE: !Ref QuizzesTable
+        OUTBOX_TABLE: !Ref OutboxTable
+        NOTIFICATION_LOCK_TABLE: !Ref NotificationLockTable
+        NOTIFICATIONS_DISABLED: "false"
+        EVENT_BUS_NAME: !Ref QuizEventBus
+        SNS_TOPIC_ARN_PREFIX: !Sub "arn:${AWS::Partition}:sns:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-quiz-group-"
+        RESULTS_TABLE: !Ref QuizResultsTable
+        UNIQUES_TABLE: !Ref UniqueKeysTable
+        # An empty endpoint uses AWS; local startup overrides it for DynamoDB Local.
+        DYNAMODB_ENDPOINT: ""
+        JWT_SECRET: !Ref JwtSecret
+        SUPABASE_URL: !Ref SupabaseUrl
+        SUPABASE_JWT_SECRET: !Ref SupabaseJwtSecret
+
+Resources:
+  # ---------------------------------------------------------------- API
+  # API Gateway handles deployed CORS and applies the default route throttles.
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref Stage
+      CorsConfiguration:
+        AllowOrigins: [!Ref AllowedOrigin]
+        AllowMethods: [GET, POST, PUT, DELETE, OPTIONS]
+        AllowHeaders: [Authorization, Content-Type]
+        # Browsers may cache preflight responses for up to 600 seconds.
+        MaxAge: 600
+      DefaultRouteSettings:
+        # Default API Gateway throttling limits: burst and sustained requests.
+        ThrottlingBurstLimit: 50
+        ThrottlingRateLimit: 25
+      Auth:
+        DefaultAuthorizer: TokenAuthorizer
+        Authorizers:
+          TokenAuthorizer:
+            FunctionArn: !GetAtt TokenAuthorizerFunction.Arn
+            AuthorizerPayloadFormatVersion: "2.0"
+            EnableSimpleResponses: true
+            EnableFunctionDefaultPermissions: true
+            Identity:
+              Headers: [Authorization]
+              ReauthorizeEvery: 0
+
+  # ---------------------------------------------------------------- IAM
+  # The shared Lambda role grants access to the named tables and their query
+  # indexes; the full-table scan permission is limited to the users table.
+  FunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      # Basic execution permissions include writing Lambda logs to CloudWatch.
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: DynamoDbAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:BatchGetItem
+                  - dynamodb:BatchWriteItem
+                # Queries against secondary indexes need their index ARNs too.
+                Resource:
+                  - !GetAtt UsersTable.Arn
+                  - !GetAtt GroupsTable.Arn
+                  - !Sub "${GroupsTable.Arn}/index/*"
+                  - !GetAtt GroupMembersTable.Arn
+                  - !Sub "${GroupMembersTable.Arn}/index/*"
+                  - !GetAtt QuizzesTable.Arn
+                  - !Sub "${QuizzesTable.Arn}/index/*"
+                  - !GetAtt QuizResultsTable.Arn
+                  - !Sub "${QuizResultsTable.Arn}/index/*"
+                  - !GetAtt UniqueKeysTable.Arn
+              - Effect: Allow
+                Action: dynamodb:PutItem
+                Resource: !GetAtt OutboxTable.Arn
+              - Effect: Allow
+                Action: dynamodb:Scan
+                Resource:
+                  - !GetAtt UsersTable.Arn
+                  - !GetAtt GroupsTable.Arn
+                  - !GetAtt GroupMembersTable.Arn
+              - Effect: Allow
+                Action: [dynamodb:PutItem, dynamodb:DeleteItem]
+                Resource: !GetAtt NotificationLockTable.Arn
+              - Effect: Allow
+                Action: [sns:ListSubscriptionsByTopic, sns:Unsubscribe, sns:DeleteTopic]
+                Resource: !Sub "arn:${AWS::Partition}:sns:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-quiz-group-*"
+
+  NotificationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: NotificationAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: [dynamodb:Scan, dynamodb:GetItem]
+                Resource:
+                  - !GetAtt UsersTable.Arn
+                  - !GetAtt GroupsTable.Arn
+                  - !GetAtt GroupMembersTable.Arn
+                  - !GetAtt OutboxTable.Arn
+              - Effect: Allow
+                Action: dynamodb:DeleteItem
+                Resource: !GetAtt OutboxTable.Arn
+              - Effect: Allow
+                Action: [dynamodb:PutItem, dynamodb:DeleteItem]
+                Resource: !GetAtt NotificationLockTable.Arn
+              - Effect: Allow
+                Action: events:PutEvents
+                Resource: !GetAtt QuizEventBus.Arn
+              - Effect: Allow
+                Action: sns:ListTopics
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - sns:CreateTopic
+                  - sns:DeleteTopic
+                  - sns:ListSubscriptionsByTopic
+                  - sns:Subscribe
+                  - sns:Unsubscribe
+                  - sns:Publish
+                Resource: !Sub "arn:${AWS::Partition}:sns:${AWS::Region}:${AWS::AccountId}:${AWS::StackName}-quiz-group-*"
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt NotificationFailureQueue.Arn
+
+  # ---------------------------------------------------------------- DynamoDB
+  # Retain tables on stack deletion/replacement and enable point-in-time
+  # recovery. Secondary indexes below support repository lookup patterns.
+  # PAY_PER_REQUEST avoids configuring provisioned read/write capacity.
+  # AttributeDefinitions lists key attributes, not every stored item field.
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification: { PointInTimeRecoveryEnabled: true }
+      AttributeDefinitions:
+        - { AttributeName: user_id, AttributeType: S }
+      KeySchema:
+        - { AttributeName: user_id, KeyType: HASH }
+
+  # Lock items enforcing uniqueness (email, username, auth_id, invite code)
+  # and acting as lookup indexes for them.
+  UniqueKeysTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification: { PointInTimeRecoveryEnabled: true }
+      AttributeDefinitions:
+        - { AttributeName: pk, AttributeType: S }
+      KeySchema:
+        - { AttributeName: pk, KeyType: HASH }
+
+  # Owner lookup supports listing groups even when membership records are missing.
+  GroupsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification: { PointInTimeRecoveryEnabled: true }
+      AttributeDefinitions:
+        - { AttributeName: id, AttributeType: S }
+        - { AttributeName: owner_id, AttributeType: S }
+      KeySchema:
+        - { AttributeName: id, KeyType: HASH }
+      GlobalSecondaryIndexes:
+        - IndexName: owner_id-index
+          KeySchema:
+            - { AttributeName: owner_id, KeyType: HASH }
+          Projection: { ProjectionType: ALL }
+
+  # Membership IDs are derived from group and user IDs in the repository.
+  # Separate indexes support listing members of a group and groups of a user.
+  GroupMembersTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification: { PointInTimeRecoveryEnabled: true }
+      AttributeDefinitions:
+        - { AttributeName: id, AttributeType: S }
+        - { AttributeName: group_id, AttributeType: S }
+        - { AttributeName: user_id, AttributeType: S }
+      KeySchema:
+        - { AttributeName: id, KeyType: HASH }
+      GlobalSecondaryIndexes:
+        - IndexName: group_id-index
+          KeySchema:
+            - { AttributeName: group_id, KeyType: HASH }
+          Projection: { ProjectionType: ALL }
+        - IndexName: user_id-index
+          KeySchema:
+            - { AttributeName: user_id, KeyType: HASH }
+          Projection: { ProjectionType: ALL }
+
+  # The group index uses createdAt as a sort key for chronological quiz queries.
+  QuizzesTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification: { PointInTimeRecoveryEnabled: true }
+      AttributeDefinitions:
+        - { AttributeName: id, AttributeType: S }
+        - { AttributeName: group_id, AttributeType: S }
+        - { AttributeName: createdAt, AttributeType: S }
+      KeySchema:
+        - { AttributeName: id, KeyType: HASH }
+      GlobalSecondaryIndexes:
+        - IndexName: group_id-index
+          KeySchema:
+            - { AttributeName: group_id, KeyType: HASH }
+            - { AttributeName: createdAt, KeyType: RANGE }
+          Projection: { ProjectionType: ALL }
+
+  # Durable quiz event registrations are retained until EventBridge accepts them.
+  OutboxTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification: { PointInTimeRecoveryEnabled: true }
+      AttributeDefinitions:
+        - { AttributeName: id, AttributeType: S }
+      KeySchema:
+        - { AttributeName: id, KeyType: HASH }
+
+  NotificationLockTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification: { PointInTimeRecoveryEnabled: true }
+      AttributeDefinitions:
+        - { AttributeName: id, AttributeType: S }
+      KeySchema:
+        - { AttributeName: id, KeyType: HASH }
+
+  QuizEventBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: !Sub "${AWS::StackName}-quiz-events"
+
+  # Trivy does not recognize SqsManagedSseEnabled in CloudFormation; the template test enforces it.
+  #trivy:ignore:AWS-0096
+  NotificationFailureQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600
+      SqsManagedSseEnabled: true
+
+  NotificationFailureQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues: [!Ref NotificationFailureQueue]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: events.amazonaws.com }
+            Action: sqs:SendMessage
+            Resource: !GetAtt NotificationFailureQueue.Arn
+            Condition:
+              ArnEquals:
+                aws:SourceArn:
+                  - !GetAtt OutboxSchedule.Arn
+                  - !GetAtt ReconciliationSchedule.Arn
+                  - !GetAtt QuizCreatedRule.Arn
+
+  OperationsAlarmKey:
+    Type: AWS::KMS::Key
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      Description: Encrypt operational alarm messages in the SNS topic
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: EnableAccountIAMPermissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:root"
+            Action: kms:*
+            Resource: "*"
+          - Sid: AllowCloudWatchAlarms
+            Effect: Allow
+            Principal: { Service: cloudwatch.amazonaws.com }
+            Action: [kms:Decrypt, "kms:GenerateDataKey*"]
+            Resource: "*"
+
+  OperationsAlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${AWS::StackName}-operations"
+      KmsMasterKeyId: !GetAtt OperationsAlarmKey.Arn
+
+  OperationsAlarmTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics: [!Ref OperationsAlarmTopic]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AccountAccess
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:root"
+            # Restrict the topic policy to actions supported on an SNS topic.
+            Action:
+              - sns:GetTopicAttributes
+              - sns:SetTopicAttributes
+              - sns:AddPermission
+              - sns:RemovePermission
+              - sns:DeleteTopic
+              - sns:Subscribe
+              - sns:ListSubscriptionsByTopic
+              - sns:Publish
+            Resource: !Ref OperationsAlarmTopic
+          - Sid: AllowFailureAlarm
+            Effect: Allow
+            Principal: { Service: cloudwatch.amazonaws.com }
+            Action: sns:Publish
+            Resource: !Ref OperationsAlarmTopic
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnEquals:
+                aws:SourceArn: !Sub "arn:${AWS::Partition}:cloudwatch:${AWS::Region}:${AWS::AccountId}:alarm:${AWS::StackName}-notification-failure"
+
+  NotificationFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    DependsOn: OperationsAlarmTopicPolicy
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-notification-failure"
+      AlarmDescription: Notification delivery or scheduling failed; inspect the failure queue.
+      AlarmActions: [!Ref OperationsAlarmTopic]
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt NotificationFailureQueue.QueueName
+      Statistic: Maximum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+  OutboxRelayFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: relayOutbox.handler
+      Role: !GetAtt NotificationRole.Arn
+      Timeout: 900
+      ReservedConcurrentExecutions: 1
+      EventInvokeConfig:
+        MaximumRetryAttempts: 2
+        DestinationConfig:
+          OnFailure:
+            Type: SQS
+            Destination: !GetAtt NotificationFailureQueue.Arn
+
+  ReconcileNotificationsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: reconcileNotifications.handler
+      Role: !GetAtt NotificationRole.Arn
+      Timeout: 900
+      ReservedConcurrentExecutions: 1
+      EventInvokeConfig:
+        MaximumRetryAttempts: 2
+        DestinationConfig:
+          OnFailure:
+            Type: SQS
+            Destination: !GetAtt NotificationFailureQueue.Arn
+
+  NotifyQuizCreatedFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: notifyQuizCreated.handler
+      Role: !GetAtt NotificationRole.Arn
+      EventInvokeConfig:
+        MaximumRetryAttempts: 2
+        DestinationConfig:
+          OnFailure:
+            Type: SQS
+            Destination: !GetAtt NotificationFailureQueue.Arn
+
+  OutboxSchedule:
+    Type: AWS::Events::Rule
+    DependsOn: QuizCreatedRulePermission
+    Properties:
+      ScheduleExpression: rate(1 minute)
+      State: ENABLED
+      Targets:
+        - Id: outbox
+          Arn: !GetAtt OutboxRelayFunction.Arn
+          DeadLetterConfig: { Arn: !GetAtt NotificationFailureQueue.Arn }
+
+  ReconciliationSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: rate(5 minutes)
+      State: ENABLED
+      Targets:
+        - Id: reconcile
+          Arn: !GetAtt ReconcileNotificationsFunction.Arn
+          DeadLetterConfig: { Arn: !GetAtt NotificationFailureQueue.Arn }
+
+  QuizCreatedRule:
+    Type: AWS::Events::Rule
+    Properties:
+      EventBusName: !Ref QuizEventBus
+      EventPattern:
+        source: [quiz.app]
+        detail-type: [QuizCreated]
+      Targets:
+        - Id: notify
+          Arn: !GetAtt NotifyQuizCreatedFunction.Arn
+          DeadLetterConfig: { Arn: !GetAtt NotificationFailureQueue.Arn }
+
+  OutboxSchedulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref OutboxRelayFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt OutboxSchedule.Arn
+
+  ReconciliationSchedulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ReconcileNotificationsFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt ReconciliationSchedule.Arn
+
+  QuizCreatedRulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref NotifyQuizCreatedFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt QuizCreatedRule.Arn
+
+  # The quiz index retrieves attempts for personal history and leaderboards.
+  QuizResultsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification: { PointInTimeRecoveryEnabled: true }
+      AttributeDefinitions:
+        - { AttributeName: id, AttributeType: S }
+        - { AttributeName: quiz_id, AttributeType: S }
+      KeySchema:
+        - { AttributeName: id, KeyType: HASH }
+      GlobalSecondaryIndexes:
+        - IndexName: quiz_id-index
+          KeySchema:
+            - { AttributeName: quiz_id, KeyType: HASH }
+          Projection: { ProjectionType: ALL }
+
+  # ---------------------------------------------------------------- Lambda functions
+  # Each HTTP event connects an API method/path to the named bundled handler.
+  # Protected routes are checked by API Gateway and again by application code.
+  # Handler names refer to exports in the modules generated by build.mjs.
+  TokenAuthorizerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: authorize.handler
+      Policies:
+        - AWSLambdaBasicExecutionRole
+
+  # Results support both personal history and the participant leaderboard.
+  GetQuizResultsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: getQuizResults.handler
+      Role: !GetAtt FunctionRole.Arn
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/quizzes/{id}/results
+            Method: GET
+
+  # Registration and login are public; login issues an application token.
+  RegisterUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: registerUser.handler
+      Role: !GetAtt FunctionRole.Arn
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/register
+            Method: POST
+            Auth:
+              Authorizer: NONE
+
+  LoginUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: loginUser.handler
+      Role: !GetAtt FunctionRole.Arn
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/login
+            Method: POST
+            Auth:
+              Authorizer: NONE
+
+  # Profile routes require authentication; update and delete check user identity.
+  GetUsersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: getUsers.handler
+      Role: !GetAtt FunctionRole.Arn
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/users
+            Method: GET
+
+  SyncUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: syncUser.handler
+      Role: !GetAtt FunctionRole.Arn
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/sync-user
+            Method: POST
+
+  GetUserByIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: getUserById.handler
+      Role: !GetAtt FunctionRole.Arn
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/user/{user_id}
+            Method: GET
+
+  UpdateUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: updateUser.handler
+      Role: !GetAtt FunctionRole.Arn
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/update-user/{user_id}
+            Method: PUT
+
+  DeleteUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: deleteUser.handler
+      Role: !GetAtt FunctionRole.Arn
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/delete-user/{user_id}
+            Method: DELETE
+
+  # Group routes cover creation, listing, lookup, owner updates and deletion.
+  CreateGroupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: createGroup.handler
+      Role: !GetAtt FunctionRole.Arn
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/groups
+            Method: POST
+
+  GetGroupsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: getGroups.handler
+      Role: !GetAtt FunctionRole.Arn
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/groups
+            Method: GET
+
+  GetGroupByIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: getGroupById.handler
+      Role: !GetAtt FunctionRole.Arn
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/groups/{groupId}
+            Method: GET
+
+  UpdateGroupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: updateGroup.handler
+      Role: !GetAtt FunctionRole.Arn
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/groups/{groupId}
+            Method: PUT
+
+  DeleteGroupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: deleteGroup.handler
+      Role: !GetAtt FunctionRole.Arn
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/groups/{groupId}
+            Method: DELETE
+
+  # Join a group using an invite code.
+  JoinGroupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: joinGroup.handler
+      Role: !GetAtt FunctionRole.Arn
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/groups/join
+            Method: POST
+
+  # Member listing, individual lookup and leaving have separate route handlers.
+  GetGroupMembersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: getGroupMembers.handler
+      Role: !GetAtt FunctionRole.Arn
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/groups/{groupId}/members
+            Method: GET
+
+  GetGroupMemberByIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: getGroupMemberById.handler
+      Role: !GetAtt FunctionRole.Arn
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/groups/{groupId}/members/{memberId}
+            Method: GET
+
+  LeaveGroupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: leaveGroup.handler
+      Role: !GetAtt FunctionRole.Arn
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/groups/{groupId}/members/leave
+            Method: DELETE
+
+  # Quiz routes cover creation, listing, retrieval, updates and deletion.
+  CreateQuizFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: createQuiz.handler
+      Role: !GetAtt FunctionRole.Arn
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/quizzes
+            Method: POST
+
+  GetQuizzesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: getQuizzes.handler
+      Role: !GetAtt FunctionRole.Arn
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/quizzes
+            Method: GET
+
+  GetQuizByIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: getQuizById.handler
+      Role: !GetAtt FunctionRole.Arn
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/quizzes/{id}
+            Method: GET
+
+  UpdateQuizFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: updateQuiz.handler
+      Role: !GetAtt FunctionRole.Arn
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/quizzes/{id}
+            Method: PUT
+
+  DeleteQuizFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: deleteQuiz.handler
+      Role: !GetAtt FunctionRole.Arn
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/quizzes/{id}
+            Method: DELETE
+
+  # Submission is scored server-side and creates a saved attempt.
+  TakeQuizFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: takeQuiz.handler
+      Role: !GetAtt FunctionRole.Arn
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /api/quizzes/{id}/submit
+            Method: POST
+
+
+Outputs:
+  # Include the stage and /api/ prefix so the frontend can append route paths.
+  ApiUrl:
+    Description: Base URL for the frontend (set VITE_API_URL to this value)
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${Stage}/api/"
+  NotificationFailureQueueUrl:
+    Description: Failure queue for notification targets and asynchronous Lambda invocations
+    Value: !Ref NotificationFailureQueue
+  NotificationLockTableName:
+    Description: Persistent lock table for notification reconciliation and membership changes
+    Value: !Ref NotificationLockTable
+  NotificationEventBusName:
+    Description: Event bus receiving quiz creation events
+    Value: !Ref QuizEventBus
+  OperationsAlarmTopicArn:
+    Description: SNS topic for operational alarms; subscribe and confirm an email endpoint
+    Value: !Ref OperationsAlarmTopic
