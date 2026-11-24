@@ -36,12 +36,18 @@ const UserSchema = {
     },
   },
 
+  // Firebase Authentication user ID
+  firebaseUid: {
+    type: DataTypes.STRING(128),
+    allowNull: true,
+    unique: true,
+    field: "firebaseUid",
+  },
+
+  // Firebase manages passwords, not PostgreSQL
   password: {
     type: DataTypes.STRING,
-    allowNull: false,
-    validate: {
-      len: [4, 255] as const,
-    },
+    allowNull: true,
   },
 };
 

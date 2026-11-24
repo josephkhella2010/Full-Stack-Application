@@ -1,33 +1,56 @@
-import express from "express";
-import { z } from "zod";
+import { Router } from "express";
+import { adminAuth } from "../../config/firebaseAdmin.js";
 import { User } from "../../models/UserSchema.js";
-import { userZodSchema } from "../../utilities/validation/userZodSchema.js";
+import firebaseAuth from "../../middleware/firebaseAuth.js";
 
-const router = express.Router();
+const router = Router();
 
-router.get("/users", async (_req, res) => {
-  const users = await User.findAll({
-    attributes: {
-      exclude: ["password"],
-    },
-  });
+router.get("/users", firebaseAuth, async (_req, res) => {
+  try {
+    const firebaseResult = await adminAuth.listUsers(1000);
 
-  const userResponseSchema = userZodSchema.omit({
-    password: true,
-  });
-
-  const validationUser = z
-    .array(userResponseSchema)
-    .safeParse(users.map((user) => user.toJSON()));
-
-  if (!validationUser.success) {
-    return res.status(400).json({
-      message: validationUser.error.issues.map((issue) => issue.message),
+    const databaseUsers = await User.findAll({
+      attributes: [
+        "id",
+        "firebaseUid",
+        "firstname",
+        "lastname",
+        "username",
+        "email",
+        "createdAt",
+        "updatedAt",
+      ],
     });
-  } else {
+
+    const users = firebaseResult.users.map((firebaseUser) => {
+      const profile = databaseUsers.find(
+        (dbUser) => dbUser.get("firebaseUid") === firebaseUser.uid,
+      );
+
+      return {
+        id: profile?.get("id") ?? null,
+        firebaseUid: firebaseUser.uid,
+        firstname: profile?.get("firstname") ?? null,
+        lastname: profile?.get("lastname") ?? null,
+        username: profile?.get("username") ?? null,
+        email: firebaseUser.email ?? null,
+        emailVerified: firebaseUser.emailVerified,
+        createdAt: profile?.get("createdAt") ?? null,
+        updatedAt: profile?.get("updatedAt") ?? null,
+      };
+    });
+
     return res.status(200).json({
-      users: validationUser.data,
-      message: ["Get users successfully"],
+      success: true,
+      count: users.length,
+      users,
+    });
+  } catch (error) {
+    console.error("Get all users error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to retrieve users",
     });
   }
 });

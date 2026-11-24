@@ -1,12 +1,11 @@
 import "./App.css";
-import LoginPage from "./pages/loginPage";
-import RegisterPage from "./pages/RegisterPage";
+
+import RoutePage from "./pages/routes/RoutePage";
 
 function App() {
   return (
     <>
-      <RegisterPage />
-      <LoginPage />
+      <RoutePage />
     </>
   );
 }

@@ -9,6 +9,6 @@ RUN npm ci
 COPY . .
 
 
-EXPOSE 5300
+EXPOSE 5020
 
 CMD ["npm", "run", "dev"]
