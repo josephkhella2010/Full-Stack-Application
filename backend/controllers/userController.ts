@@ -1,27 +1,6 @@
-import { Request, Response } from "express";
-import { adminAuth } from "../config/firebaseAdmin.js";
+/* import { Request, Response } from "express";
 import { User } from "../models/UserSchema.js";
 import { AuthRequest } from "../middleware/verifyFirebaseToken.js";
-
-// Get users from Firebase
-/* export const getUsers = async (req: Request, res: Response) => {
-  try {
-    const result = await adminAuth.listUsers(1000);
-
-    res.status(200).json({
-      users: result.users.map((user) => ({
-        uid: user.uid,
-        email: user.email,
-        displayName: user.displayName,
-        emailVerified: user.emailVerified,
-      })),
-    });
-  } catch (error) {
-    res.status(500).json({
-      message: "Could not retrieve users",
-    });
-  }
-}; */
 
 // Get users from PostgreSQL
 export const getUsers = async (_req: Request, res: Response) => {
@@ -97,3 +76,4 @@ export const registerUser = async (req: AuthRequest, res: Response) => {
     });
   }
 };
+ */

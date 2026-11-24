@@ -1,11 +1,11 @@
 import { Router } from "express";
 import { adminAuth } from "../../config/firebaseAdmin.js";
 import { User } from "../../models/UserSchema.js";
-import firebaseAuth from "../../middleware/firebaseAuth.js";
+//import firebaseAuth from "../../middleware/firebaseAuth.js";
 
 const router = Router();
 
-router.get("/users", firebaseAuth, async (_req, res) => {
+router.get("/users", async (_req, res) => {
   try {
     const firebaseResult = await adminAuth.listUsers(1000);
 

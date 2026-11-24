@@ -1,6 +1,4 @@
 import { useState } from "react";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../FirebaseConfig/firebaseConfig";
 
 function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -17,46 +15,31 @@ function RegisterPage() {
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
 
-    setFormData({
-      ...formData,
+    setFormData((previous) => ({
+      ...previous,
       [name]: value,
-    });
+    }));
   };
 
-  const handleRegister = async (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
     try {
-      // 1. Register user in Firebase
-      const result = await createUserWithEmailAndPassword(
-        auth,
-        formData.email,
-        formData.password,
-      );
-
-      // 2. Get Firebase token
-      const token = await result.user.getIdToken();
-
-      // 3. Save user in PostgreSQL through Express
+      // Send registration details to backend
       const response = await fetch("http://localhost:5020/api/register", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          firstname: formData.firstname,
-          lastname: formData.lastname,
-          username: formData.username,
-        }),
+        body: JSON.stringify(formData),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || "Could not save user");
+        throw new Error(data.message || "Registration failed");
       }
 
       alert("Registration successful!");
@@ -68,12 +51,10 @@ function RegisterPage() {
         email: "",
         password: "",
       });
-    } catch (err: any) {
-      console.error("Firebase error code:", err.code);
-      console.error("Firebase error message:", err.message);
-      console.error("Full Firebase error:", err);
+    } catch (err: unknown) {
+      console.error("Registration error:", err);
 
-      setError(err.message || "Registration failed");
+      setError(err instanceof Error ? err.message : "Registration failed");
     } finally {
       setLoading(false);
     }
