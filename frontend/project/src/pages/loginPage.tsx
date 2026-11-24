@@ -1,70 +1,62 @@
 import { useState } from "react";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../FirebaseConfig/firebaseConfig";
+import { useDispatch, useSelector } from "react-redux";
+import type { RootState } from "../store/store";
 
-function LoginPage() {
+function Login() {
+  const dispatch = useDispatch();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const { error, isSuccess } = useSelector(
+    (state: RootState) => state.loadingErrorSlice,
+  );
+
+  const handleLogin = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setError("");
 
-    try {
-      // Log in with Firebase
-      const userCredential = await signInWithEmailAndPassword(
-        auth,
+    dispatch({
+      type: "FETCH_LOGIN_USER",
+      payload: {
         email,
         password,
-      );
-
-      // Get Firebase ID token
-      const token = await userCredential.user.getIdToken();
-      // Get logged-in user
-      const user = userCredential.user;
-
-      // Print user information
-      console.log("User:", user.email);
-      console.log("User:", user.uid);
-
-      // Print token in browser console
-      console.log("Firebase ID Token:", token);
-
-      alert("Login successful!");
-    } catch (error) {
-      console.error("Login error:", error);
-      setError("Invalid email or password.");
-    }
+      },
+    });
   };
 
   return (
-    <div>
-      <h1>Login</h1>
+    <form onSubmit={handleLogin}>
+      <h2>Login</h2>
 
-      <form onSubmit={handleLogin}>
+      <div>
+        <label>Email</label>
         <input
           type="email"
-          placeholder="Email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          placeholder="Enter your email"
           required
         />
+      </div>
 
+      <div>
+        <label>Password</label>
         <input
           type="password"
-          placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          placeholder="Enter your password"
           required
         />
+      </div>
 
-        <button type="submit">Login</button>
-      </form>
+      <button type="submit">Log</button>
 
       {error && <p>{error}</p>}
-    </div>
+
+      {isSuccess && <p>Login successful!</p>}
+    </form>
   );
 }
 
-export default LoginPage;
+export default Login;
