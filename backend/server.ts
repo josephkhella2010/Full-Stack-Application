@@ -7,7 +7,7 @@ import { connectDatabase } from "./config/connectDatabase.js";
 import userRoutes from "./routes/UserRoutes/getAllUser.js";
 import registerUser from "./routes/UserRoutes/registerUser.js";
 import getUserById from "./routes/UserRoutes/getUserById.js";
-
+import loginUser from "./routes/UserRoutes/loginUser.js";
 ///
 const app = express();
 const PORT = Number(process.env.PORT) || 5020;
@@ -32,6 +32,7 @@ app.get("/api/test", (_req, res) => {
 // User routes
 app.use("/api", userRoutes);
 app.use("/api", registerUser);
+app.use("/api", loginUser);
 app.use("/api", getUserById);
 
 ///
