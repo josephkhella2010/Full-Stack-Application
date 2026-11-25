@@ -1,4 +1,4 @@
-# CI/CD workflow
+# GitHub Actions CI/CD Workflow
 
 name: CI/CD
 
@@ -10,7 +10,7 @@ on:
 
 jobs:
   build:
-    name: Build and test with Node.js ${{ matrix.node-version }}
+    name: Build with Node.js ${{ matrix.node-version }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -20,22 +20,35 @@ jobs:
         node-version: [22.x, 24.x]
 
     steps:
+      #########################################
+      # Checkout and Node.js
+      #########################################
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Use Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: "npm"
+          cache: npm
           cache-dependency-path: |
             backend/package-lock.json
             frontend/project/package-lock.json
 
+      #########################################
       # Backend
+      #########################################
 
       - name: Install backend dependencies
         run: npm ci
+        working-directory: ./backend
+
+      - name: Create Firebase service account file
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > config/serviceAccountKey.json
         working-directory: ./backend
 
       - name: Backend TypeScript check
@@ -46,7 +59,9 @@ jobs:
         run: npm run lint
         working-directory: ./backend
 
+      #########################################
       # Frontend
+      #########################################
 
       - name: Install frontend dependencies
         run: npm ci
@@ -60,7 +75,9 @@ jobs:
         run: npm run lint
         working-directory: ./frontend/project
 
+      #########################################
       # Final steps
+      #########################################
 
       - name: List files
         run: ls -la
