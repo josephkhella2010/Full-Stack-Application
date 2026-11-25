@@ -1,12 +1,25 @@
 import { Router } from "express";
 import { User } from "../../models/UserSchema.js";
 import firebaseAuth, { AuthRequest } from "../../middleware/firebaseAuth.js";
+import { idSchema } from "../../zodvalidation/UserSchema.js";
 
 const router = Router();
 
 router.get("/users/:uid", firebaseAuth, async (req: AuthRequest, res) => {
   try {
-    // 1. Get UID from verified Firebase token
+    // 1. Validate UID using Zod
+    const parsed = idSchema.safeParse(req.params);
+
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: parsed.error.issues.map((issue) => issue.message).join(", "),
+      });
+    }
+
+    const requestedUid = parsed.data.uid;
+
+    // 2. Get UID from verified Firebase token
     const firebaseUid = req.auth?.payload.sub;
 
     if (!firebaseUid) {
@@ -16,10 +29,7 @@ router.get("/users/:uid", firebaseAuth, async (req: AuthRequest, res) => {
       });
     }
 
-    // 2. Get UID from URL
-    const requestedUid = req.params.uid;
-
-    // 3. Check that the requested UID belongs to token owner
+    // 3. Check that the requested UID belongs to the token owner
     if (requestedUid !== firebaseUid) {
       return res.status(403).json({
         success: false,
@@ -29,7 +39,9 @@ router.get("/users/:uid", firebaseAuth, async (req: AuthRequest, res) => {
 
     // 4. Find user in PostgreSQL using Firebase UID
     const user = await User.findOne({
-      where: { firebaseUid },
+      where: {
+        firebaseUid,
+      },
       attributes: [
         "id",
         "firebaseUid",
@@ -49,12 +61,12 @@ router.get("/users/:uid", firebaseAuth, async (req: AuthRequest, res) => {
       });
     }
 
-    // 5. Return the user's own profile
+    // 5. Return the user's profile
     return res.status(200).json({
       success: true,
       user,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Get user by UID error:", error);
 
     return res.status(500).json({
