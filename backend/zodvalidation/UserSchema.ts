@@ -87,7 +87,7 @@ export const updateUserSchema = z.object({
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 
 export const idSchema = z.object({
-  uid: z.string().trim(),
+  uid: z.string().trim().min(1, "User ID cannot be empty"),
 });
 
 export type GetUserByIdInput = z.infer<typeof idSchema>;
