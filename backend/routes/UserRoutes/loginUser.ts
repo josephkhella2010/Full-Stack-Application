@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { User } from "../../models/UserSchema.js";
 import { adminAuth } from "../../config/firebaseAdmin.js";
-import { loginSchema } from "../../zodvalidation/UserSchema.js";
+import { loginSchema } from "../../zodValidation/UserSchema.js";
 
 const router = Router();
 
