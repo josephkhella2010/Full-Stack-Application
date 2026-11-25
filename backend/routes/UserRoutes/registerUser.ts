@@ -3,7 +3,7 @@ import { User } from "../../models/UserSchema.js";
 import { sequelize } from "../../config/database.js";
 import { UniqueConstraintError } from "sequelize";
 import { adminAuth } from "../../config/firebaseAdmin.js";
-import { registerUserSchema } from "../../zodvalidation/UserSchema.js";
+import { registerUserSchema } from "../../zodValidation/UserSchema.js";
 
 const router = Router();
 

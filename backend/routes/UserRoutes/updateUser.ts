@@ -5,7 +5,7 @@ import { User } from "../../models/UserSchema.js";
 import { adminAuth } from "../../config/firebaseAdmin.js";
 import firebaseAuth from "../../middleware/firebaseAuth.js";
 import type { AuthRequest } from "../../middleware/firebaseAuth.js";
-import { idSchema, updateUserSchema } from "../../zodvalidation/UserSchema.js";
+import { idSchema, updateUserSchema } from "../../zodValidation/UserSchema.js";
 
 const router = Router();
 
