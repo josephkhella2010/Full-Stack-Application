@@ -4,6 +4,7 @@ import LoginPage from "../loginPage";
 import HomePage from "../Home/HomePage";
 import NavBar from "../Navigation/NavBar";
 import UserInfoPage from "../UserInfoPage";
+import UpdateUserPage from "../UpdateUserPage";
 
 export default function RoutePage() {
   return (
@@ -14,6 +15,7 @@ export default function RoutePage() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/userinfo/:id" element={<UserInfoPage />} />
+        <Route path="/update-user/:id" element={<UpdateUserPage />} />
       </Routes>
     </Router>
   );

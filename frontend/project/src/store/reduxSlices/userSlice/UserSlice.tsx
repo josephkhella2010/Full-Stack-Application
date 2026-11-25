@@ -55,10 +55,67 @@ const userSlice = createSlice({
       localStorage.removeItem("user");
       toast.success("you are Logged Out");
     },
+    setDeleteUser: (state, action: PayloadAction<string>) => {
+      state.users = state.users.filter(
+        (u) => String(u.firebaseUid) !== String(action.payload),
+      );
+      state.user = null;
+      state.userStore = {
+        userStoraged: null,
+        token: null,
+      };
+
+      localStorage.removeItem("user");
+      toast.success("you are Logged Out");
+    },
+    setUpdateUser: (
+      state,
+      action: PayloadAction<{ data: UserType; id: string }>,
+    ) => {
+      const { data, id } = action.payload;
+
+      // Update the user in the users array
+      const findIndex = state.users.findIndex(
+        (u) => String(u.firebaseUid) === id,
+      );
+
+      if (findIndex !== -1) {
+        state.users[findIndex] = {
+          ...state.users[findIndex],
+          ...data,
+        };
+      }
+
+      // Update the currently selected user
+      if (state.user?.firebaseUid === id) {
+        state.user = {
+          ...state.user,
+          ...data,
+        };
+      }
+
+      // Update the logged-in user in userStore
+      if (state.userStore.userStoraged?.firebaseUid === id) {
+        state.userStore.userStoraged = {
+          ...state.userStore.userStoraged,
+          ...data,
+        };
+
+        // Save the updated user and preserve the token
+        localStorage.setItem("user", JSON.stringify(state.userStore));
+      }
+    },
   },
 });
 
-export const { setUsers, setUser, setUserById, setUserStore, setLogOut } =
-  userSlice.actions;
+export const {
+  setUsers,
+  setUser,
+  setUserById,
+  setUserStore,
+  setLogOut,
+  setDeleteUser,
+  setUpdateUser,
+} = userSlice.actions;
 
 export default userSlice.reducer;
