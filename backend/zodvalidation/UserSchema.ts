@@ -44,3 +44,9 @@ export const loginSchema = z.object({
 });
 
 export type LoginUserInput = z.infer<typeof loginSchema>;
+
+export const idSchema = z.object({
+  uid: z.string().trim(),
+});
+
+export type GetUserByIdInput = z.infer<typeof idSchema>;
