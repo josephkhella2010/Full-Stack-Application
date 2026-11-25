@@ -38,7 +38,7 @@ jobs:
         working-directory: ./backend
 
       - name: Backend TypeScript check
-        run: npm run typecheck
+        run: npm run check
         working-directory: ./backend
 
       - name: Backend lint
