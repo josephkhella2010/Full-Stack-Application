@@ -1,4 +1,4 @@
-# This workflow installs dependencies and runs checks using Node.js
+# CI/CD workflow
 
 name: CI/CD
 
@@ -10,9 +10,12 @@ on:
 
 jobs:
   build:
+    name: Build and test with Node.js ${{ matrix.node-version }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     strategy:
+      fail-fast: false
       matrix:
         node-version: [22.x, 24.x]
 
@@ -29,9 +32,7 @@ jobs:
             backend/package-lock.json
             frontend/project/package-lock.json
 
-      #########################################
       # Backend
-      #########################################
 
       - name: Install backend dependencies
         run: npm ci
@@ -45,9 +46,7 @@ jobs:
         run: npm run lint
         working-directory: ./backend
 
-      #########################################
       # Frontend
-      #########################################
 
       - name: Install frontend dependencies
         run: npm ci
@@ -61,9 +60,7 @@ jobs:
         run: npm run lint
         working-directory: ./frontend/project
 
-      #########################################
       # Final steps
-      #########################################
 
       - name: List files
         run: ls -la
