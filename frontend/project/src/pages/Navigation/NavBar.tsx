@@ -15,6 +15,9 @@ export default function NavBar() {
   const { userStoraged, token } = useSelector(
     (state: RootState) => state.userSlice.userStore,
   );
+  const user = useSelector(
+    (state: RootState) => state.userSlice.userStore.userStoraged,
+  );
 
   // Check if user is logged in
   const isLoggedIn = Boolean(token && userStoraged);
@@ -46,6 +49,17 @@ export default function NavBar() {
     setDropdownOpen(false);
     navigate("/login");
   }
+  //delete user
+  const handleDeleteAccount = () => {
+    if (user?.firebaseUid) {
+      dispatch({
+        type: "FETCH_DELETE_USER",
+        payload: {
+          uid: user.firebaseUid,
+        },
+      });
+    }
+  };
 
   return (
     <nav>
@@ -87,8 +101,17 @@ export default function NavBar() {
                   User Information
                 </button>
 
+                <button
+                  onClick={() => {
+                    if (user?.firebaseUid) {
+                      navigate(`/update-user/${userStoraged.firebaseUid}`);
+                    }
+                  }}
+                >
+                  update Account
+                </button>
+                <button onClick={handleDeleteAccount}>Delete Account</button>
                 <hr />
-
                 <button type="button" onClick={handleLogout}>
                   Logout
                 </button>

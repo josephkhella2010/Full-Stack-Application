@@ -8,9 +8,7 @@ function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const { error, isSuccess } = useSelector(
-    (state: RootState) => state.loadingErrorSlice,
-  );
+  const { error } = useSelector((state: RootState) => state.loadingErrorSlice);
 
   const handleLogin = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -50,11 +48,9 @@ function Login() {
         />
       </div>
 
-      <button type="submit">Log</button>
+      <button type="submit">Log in</button>
 
       {error && <p>{error}</p>}
-
-      {isSuccess && <p>Login successful!</p>}
     </form>
   );
 }

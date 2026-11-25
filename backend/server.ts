@@ -9,6 +9,7 @@ import registerUser from "./routes/UserRoutes/registerUser.js";
 import getUserById from "./routes/UserRoutes/getUserById.js";
 import loginUser from "./routes/UserRoutes/loginUser.js";
 import deleteUser from "./routes/UserRoutes/deleteUser.js";
+import updateUser from "./routes/UserRoutes/updateUser.js";
 ///
 const app = express();
 const PORT = Number(process.env.PORT) || 5020;
@@ -36,6 +37,7 @@ app.use("/api", registerUser);
 app.use("/api", loginUser);
 app.use("/api", getUserById);
 app.use("/api", deleteUser);
+app.use("/api", updateUser);
 ///
 
 app.listen(PORT, "0.0.0.0", async () => {
