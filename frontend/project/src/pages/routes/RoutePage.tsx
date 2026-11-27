@@ -1,10 +1,12 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import RegisterPage from "../RegisterPage";
-import LoginPage from "../loginPage";
+import RegisterPage from "../User/RegisterPage";
+import LoginPage from "../User/loginPage";
 import HomePage from "../Home/HomePage";
 import NavBar from "../Navigation/NavBar";
-import UserInfoPage from "../UserInfoPage";
-import UpdateUserPage from "../UpdateUserPage";
+import UserInfoPage from "../User/UserInfoPage";
+import UpdateUserPage from "../User/UpdateUserPage";
+import BooksPage from "../Book/BooksPage";
+import BookInfoPage from "../Book/BookInfoPage";
 
 export default function RoutePage() {
   return (
@@ -16,6 +18,8 @@ export default function RoutePage() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/userinfo/:id" element={<UserInfoPage />} />
         <Route path="/update-user/:id" element={<UpdateUserPage />} />
+        <Route path="/books" element={<BooksPage />} />
+        <Route path="/book/:id" element={<BookInfoPage />} />
       </Routes>
     </Router>
   );

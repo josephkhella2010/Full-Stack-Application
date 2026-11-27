@@ -1,5 +1,6 @@
 import { Router } from "express";
-import { Op } from "sequelize";
+import { Op, type Order } from "sequelize";
+
 import { Book } from "../../models/BookSchema.js";
 import { getBooksQuerySchema } from "../../zodValidation/BookSchema.js";
 import { firebaseAuth } from "../../middleware/firebaseAuth.js";
@@ -8,6 +9,7 @@ const router = Router();
 
 router.get("/books", firebaseAuth, async (req, res) => {
   try {
+    // Validate query parameters
     const validation = getBooksQuerySchema.safeParse(req.query);
 
     if (!validation.success) {
@@ -18,16 +20,27 @@ router.get("/books", firebaseAuth, async (req, res) => {
       });
     }
 
-    const { title, author, sortBy, order } = validation.data;
+    const { title, sortBy, dateOrder, titleOrder } = validation.data;
 
-    const where = {
-      ...(title ? { title: { [Op.iLike]: `%${title}%` } } : {}),
-      ...(author ? { author: { [Op.iLike]: `%${author}%` } } : {}),
-    };
+    // Search by title
+    const where = title
+      ? {
+        title: {
+          [Op.iLike]: `%${title}%`,
+        },
+      }
+      : {};
 
+    // Sort using only the selected sorting method
+    const order: Order =
+      sortBy === "date"
+        ? [["createdAt", dateOrder === "asc" ? "ASC" : "DESC"]]
+        : [["title", titleOrder === "az" ? "ASC" : "DESC"]];
+
+    // Fetch books
     const books = await Book.findAll({
       where,
-      order: [[sortBy, order]],
+      order,
     });
 
     return res.status(200).json({

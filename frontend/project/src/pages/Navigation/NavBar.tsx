@@ -38,6 +38,9 @@ export default function NavBar() {
       case "login":
         navigate("/login");
         break;
+      case "books":
+        navigate("/books");
+        break;
       default:
         break;
     }
@@ -64,7 +67,7 @@ export default function NavBar() {
   return (
     <nav>
       <ul>
-        <li onClick={() => navigateUrl("home")}>Home</li>
+        <p onClick={() => navigateUrl("home")}>Home</p>
 
         {!isLoggedIn ? (
           <>
@@ -73,7 +76,9 @@ export default function NavBar() {
             <li onClick={() => navigateUrl("login")}>Login</li>
           </>
         ) : (
-          <li className="user-menu">
+          <div className="user-menu">
+            <li onClick={() => navigateUrl("books")}>Books</li>
+
             <button
               type="button"
               className="user-avatar"
@@ -81,43 +86,44 @@ export default function NavBar() {
             >
               {initials}
             </button>
-
             {dropdownOpen && userStoraged && (
-              <div className="user-dropdown">
-                <h3>
-                  {userStoraged.firstname} {userStoraged.lastname}
-                </h3>
+              <div>
+                <div className="user-dropdown">
+                  <h3>
+                    {userStoraged.firstname} {userStoraged.lastname}
+                  </h3>
 
-                <p>@{userStoraged.username}</p>
-                <p>{userStoraged.email}</p>
-                <button
-                  onClick={() => {
-                    if (userStoraged) {
-                      navigate(`/userinfo/${userStoraged.firebaseUid}`);
-                      setDropdownOpen(false);
-                    }
-                  }}
-                >
-                  User Information
-                </button>
+                  <p>@{userStoraged.username}</p>
+                  <p>{userStoraged.email}</p>
+                  <button
+                    onClick={() => {
+                      if (userStoraged) {
+                        navigate(`/userinfo/${userStoraged.firebaseUid}`);
+                        setDropdownOpen(false);
+                      }
+                    }}
+                  >
+                    User Information
+                  </button>
 
-                <button
-                  onClick={() => {
-                    if (user?.firebaseUid) {
-                      navigate(`/update-user/${userStoraged.firebaseUid}`);
-                    }
-                  }}
-                >
-                  update Account
-                </button>
-                <button onClick={handleDeleteAccount}>Delete Account</button>
-                <hr />
-                <button type="button" onClick={handleLogout}>
-                  Logout
-                </button>
+                  <button
+                    onClick={() => {
+                      if (user?.firebaseUid) {
+                        navigate(`/update-user/${userStoraged.firebaseUid}`);
+                      }
+                    }}
+                  >
+                    update Account
+                  </button>
+                  <button onClick={handleDeleteAccount}>Delete Account</button>
+                  <hr />
+                  <button type="button" onClick={handleLogout}>
+                    Logout
+                  </button>
+                </div>
               </div>
             )}
-          </li>
+          </div>
         )}
       </ul>
     </nav>
