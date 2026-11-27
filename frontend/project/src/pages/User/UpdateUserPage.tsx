@@ -2,8 +2,8 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 
-import type { AppDispatch, RootState } from "../store/store";
-import type { UserType } from "../utilities/interfaces";
+import type { AppDispatch, RootState } from "../../store/store";
+import type { UserType } from "../../utilities/interfaces";
 
 interface UpdateFormType {
   firstname: string;

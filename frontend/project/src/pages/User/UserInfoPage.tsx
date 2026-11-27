@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useParams, Navigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 
-import type { RootState, AppDispatch } from "../store/store";
+import type { RootState, AppDispatch } from "../../store/store";
 
 export default function UserInfoPage() {
   const { id } = useParams<{ id: string }>();
