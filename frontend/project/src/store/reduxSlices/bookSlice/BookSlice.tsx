@@ -4,11 +4,15 @@ import type { BookType } from "../../../utilities/interfaces";
 interface InitialStateType {
   books: BookType[];
   bookById: null | BookType;
+  userBooks: BookType[];
+  userBook: null | BookType;
 }
 
 const initialState: InitialStateType = {
   books: [],
   bookById: null,
+  userBooks: [],
+  userBook: null,
 };
 
 const bookSlice = createSlice({
@@ -22,9 +26,12 @@ const bookSlice = createSlice({
     setBookById: (state, action: PayloadAction<BookType>) => {
       state.bookById = action.payload;
     },
+    setAddBookToUser: (state, action: PayloadAction<BookType>) => {
+      state.userBooks.push(action.payload);
+    },
   },
 });
 
-export const { setBooks, setBookById } = bookSlice.actions;
+export const { setBooks, setBookById, setAddBookToUser } = bookSlice.actions;
 
 export default bookSlice.reducer;
