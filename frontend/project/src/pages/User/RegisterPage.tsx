@@ -109,7 +109,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
-import type { RootState, AppDispatch } from "../store/store";
+import type { RootState, AppDispatch } from "../../store/store";
 
 function RegisterPage() {
   const dispatch = useDispatch<AppDispatch>();

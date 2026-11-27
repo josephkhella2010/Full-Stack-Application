@@ -29,7 +29,7 @@ interface ApiRequest {
   token?: string;
   body?: unknown;
   headers?: Record<string, string>;
-  params?: Record<string, string | number | boolean>;
+  params?: Record<string, string | number | boolean | undefined>;
 }
 
 export const apiRequest = async ({

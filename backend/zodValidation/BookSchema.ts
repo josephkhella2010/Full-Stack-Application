@@ -37,8 +37,6 @@ export const bookIdSchema = z.object({
   id: z.coerce.number().int().positive(),
 });
 
-
-
 export const UserIdSchema = z.object({
   uid: z.string().trim().min(1, "User ID cannot be empty"),
 });
@@ -49,14 +47,10 @@ export const BookIdSchema = z.object({
 
 export const getBooksQuerySchema = z.object({
   title: z.string().trim().optional(),
-  author: z.string().trim().optional(),
-
-  sortBy: z.enum(["title", "author", "createdAt"]).default("createdAt"),
-
-  order: z.enum(["ASC", "DESC"]).default("DESC"),
+  sortBy: z.enum(["date", "title"]).default("date"),
+  dateOrder: z.enum(["asc", "desc"]).default("desc"),
+  titleOrder: z.enum(["az", "za"]).default("az"),
 });
-
-
 
 export type CreateBookInput = z.infer<typeof createBookSchema>;
 export type UpdateBookInput = z.infer<typeof updateBookSchema>;

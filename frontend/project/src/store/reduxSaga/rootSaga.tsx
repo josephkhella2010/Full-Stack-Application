@@ -5,6 +5,8 @@ import { WatchFetchLoginUser } from "./UserSaga/fetchLoginUser";
 import { WatchFetchUserById } from "./UserSaga/fetchUserById";
 import { WatchFetchDeleteUser } from "./UserSaga/fetchDeleteUser";
 import { WatchFetchUpdateUser } from "./UserSaga/fetchUpdateUser";
+import { watchFetchBooks } from "./bookSaga/fetchAllBooks";
+import { watchFetchBookById } from "./bookSaga/fetchBookById";
 
 export default function* RootSaga() {
   yield all([
@@ -14,5 +16,7 @@ export default function* RootSaga() {
     WatchFetchUserById(),
     WatchFetchDeleteUser(),
     WatchFetchUpdateUser(),
+    watchFetchBooks(),
+    watchFetchBookById(),
   ]);
 }

@@ -3,13 +3,14 @@ import createSagaMiddleware from "redux-saga";
 import rootSaga from "./reduxSaga/rootSaga";
 import UserSliceReducer from "./reduxSlices/userSlice/UserSlice";
 import LoadingErrorReducer from "./reduxSlices/LoadingSlice/LoadingAndErrorSlice";
-
+import BookReducer from "./reduxSlices/bookSlice/BookSlice";
 const sagaMiddleware = createSagaMiddleware();
 
 export const store = configureStore({
   reducer: {
     userSlice: UserSliceReducer,
     loadingErrorSlice: LoadingErrorReducer,
+    bookSlice: BookReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
