@@ -5,14 +5,12 @@ interface InitialStateType {
   books: BookType[];
   bookById: null | BookType;
   userBooks: BookType[];
-  userBook: null | BookType;
 }
 
 const initialState: InitialStateType = {
   books: [],
   bookById: null,
   userBooks: [],
-  userBook: null,
 };
 
 const bookSlice = createSlice({
@@ -26,12 +24,19 @@ const bookSlice = createSlice({
     setBookById: (state, action: PayloadAction<BookType>) => {
       state.bookById = action.payload;
     },
-    setAddBookToUser: (state, action: PayloadAction<BookType>) => {
+    setBooksUser: (state, action: PayloadAction<BookType[]>) => {
+      state.userBooks = action.payload;
+    },
+    setAddUserToBook: (state, action: PayloadAction<BookType>) => {
       state.userBooks.push(action.payload);
+      if (state.bookById?.id === action.payload.id) {
+        state.bookById = action.payload;
+      }
     },
   },
 });
 
-export const { setBooks, setBookById, setAddBookToUser } = bookSlice.actions;
+export const { setBooks, setBookById, setBooksUser, setAddUserToBook } =
+  bookSlice.actions;
 
 export default bookSlice.reducer;

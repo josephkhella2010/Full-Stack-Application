@@ -21,7 +21,7 @@ export default function RoutePage() {
         <Route path="/update-user/:id" element={<UpdateUserPage />} />
         <Route path="/books" element={<BooksPage />} />
         <Route path="/book/:id" element={<BookInfoPage />} />
-        <Route path="/books/user" element={<BooksUser />} />
+        <Route path="/my-library" element={<BooksUser />} />
       </Routes>
     </Router>
   );
