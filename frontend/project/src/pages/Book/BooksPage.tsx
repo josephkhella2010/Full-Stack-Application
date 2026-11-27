@@ -120,7 +120,7 @@ const BooksPage = () => {
 
               <button
                 type="button"
-                onClick={() => navigate(`/books/${book.id}`)}
+                onClick={() => navigate(`/book/${book.id}`)}
               >
                 Show Book
               </button>
