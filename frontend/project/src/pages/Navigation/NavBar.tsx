@@ -40,7 +40,14 @@ export default function NavBar() {
         break;
       case "books":
         navigate("/books");
+
         break;
+
+      case "library":
+        navigate("/my-library");
+
+        break;
+
       default:
         break;
     }
@@ -64,6 +71,7 @@ export default function NavBar() {
     }
   };
 
+  console.log("token", token);
   return (
     <nav>
       <ul>
@@ -78,6 +86,7 @@ export default function NavBar() {
         ) : (
           <div className="user-menu">
             <li onClick={() => navigateUrl("books")}>Books</li>
+            <li onClick={() => navigateUrl("library")}>My Library</li>
 
             <button
               type="button"

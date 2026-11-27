@@ -6,10 +6,13 @@ import type { RootState, AppDispatch } from "../../store/store";
 
 function BookDetailsPage() {
   const dispatch = useDispatch<AppDispatch>();
-
   const { id } = useParams<{ id: string }>();
 
   const book = useSelector((state: RootState) => state.bookSlice.bookById);
+
+  const user = useSelector(
+    (state: RootState) => state.userSlice.userStore.userStoraged,
+  );
 
   const isLoading = useSelector(
     (state: RootState) => state.loadingErrorSlice.isLoading,
@@ -19,6 +22,15 @@ function BookDetailsPage() {
     (state: RootState) => state.loadingErrorSlice.error,
   );
 
+  // Check whether the book belongs to the logged-in user
+  const alreadyAdded = book?.userId === user?.firebaseUid;
+
+  // Check whether another user has added the book
+  const alreadyTaken =
+    book?.userId !== null &&
+    book?.userId !== undefined &&
+    book?.userId !== user?.firebaseUid;
+
   useEffect(() => {
     if (id) {
       dispatch({
@@ -26,7 +38,35 @@ function BookDetailsPage() {
         payload: Number(id),
       });
     }
-  }, [dispatch, id]);
+
+    if (user?.firebaseUid) {
+      dispatch({
+        type: "FETCH_USER_BOOKS",
+        payload: user.firebaseUid,
+      });
+    }
+  }, [dispatch, id, user?.firebaseUid]);
+
+  // Add book to logged-in user's library
+  const handleAddBook = () => {
+    if (
+      !book ||
+      !user?.firebaseUid ||
+      alreadyAdded ||
+      alreadyTaken ||
+      isLoading
+    ) {
+      return;
+    }
+
+    dispatch({
+      type: "ADD_BOOK_TO_USER",
+      payload: {
+        bookId: book.id,
+        userId: user.firebaseUid,
+      },
+    });
+  };
 
   if (isLoading) {
     return <p>Loading book...</p>;
@@ -49,9 +89,24 @@ function BookDetailsPage() {
       {book.imgs?.map((img, index) => (
         <img key={index} src={img} alt={book.title} width="200" />
       ))}
+
       <div>
-        <button>Add to My Library</button>
-        <button> Loan Book</button>
+        <button
+          onClick={handleAddBook}
+          disabled={
+            !user?.firebaseUid || alreadyAdded || alreadyTaken || isLoading
+          }
+        >
+          {alreadyAdded
+            ? "Already in My Library"
+            : alreadyTaken
+              ? "Already taken"
+              : !user?.firebaseUid
+                ? "Login to add book"
+                : "Add to My Library"}
+        </button>
+
+        <button>Loan Book</button>
       </div>
     </div>
   );

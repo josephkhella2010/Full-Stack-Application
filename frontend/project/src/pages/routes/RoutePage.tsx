@@ -7,6 +7,7 @@ import UserInfoPage from "../User/UserInfoPage";
 import UpdateUserPage from "../User/UpdateUserPage";
 import BooksPage from "../Book/BooksPage";
 import BookInfoPage from "../Book/BookInfoPage";
+import BooksUser from "../Book/BooksUser";
 
 export default function RoutePage() {
   return (
@@ -20,6 +21,7 @@ export default function RoutePage() {
         <Route path="/update-user/:id" element={<UpdateUserPage />} />
         <Route path="/books" element={<BooksPage />} />
         <Route path="/book/:id" element={<BookInfoPage />} />
+        <Route path="/my-library" element={<BooksUser />} />
       </Routes>
     </Router>
   );
