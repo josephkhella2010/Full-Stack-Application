@@ -60,6 +60,11 @@ export const addUserBookSchema = z.object({
   bookId: z.coerce.number().int().positive("Invalid book ID"),
   userId: z.string().trim().min(1, "User ID is required"),
 });
+export const RemoveBookSchema = z.object({
+  bookId: z.coerce.number().int().positive({
+    message: "Invalid book ID",
+  }),
+});
 
 export type CreateBookInput = z.infer<typeof createBookSchema>;
 export type UpdateBookInput = z.infer<typeof updateBookSchema>;

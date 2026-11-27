@@ -44,6 +44,12 @@ export default function BooksUser() {
   if (userBooks.length === 0) {
     return <p>You haven't added any books to your library yet.</p>;
   }
+  const handleRemoveBook = (bookId: number) => {
+    dispatch({
+      type: "DELETE_USER_BOOK",
+      payload: String(bookId),
+    });
+  };
 
   return (
     <div>
@@ -60,9 +66,14 @@ export default function BooksUser() {
               <img key={index} src={img} alt={book.title} width="150" />
             ))}
 
-            <button onClick={() => navigate(`/book/${book.id}`)}>
-              View Book
-            </button>
+            <div>
+              <button onClick={() => handleRemoveBook(book.id)}>
+                Delete Book From Library
+              </button>
+              <button onClick={() => navigate(`/book/${book.id}`)}>
+                View Book
+              </button>
+            </div>
           </div>
         ))}
       </div>

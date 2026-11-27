@@ -16,6 +16,7 @@ import getBookById from "./routes/BookRoutes/getBookById.js";
 import createBook from "./routes/BookRoutes/createBook.js";
 import addBookToUser from "./routes/BookRoutes/addBookToUser.js";
 import getUserBooks from "./routes/BookRoutes/getUserBooks.js";
+import deleteUserBooks from "./routes/BookRoutes/deleteBookFromUser.js";
 ///
 const app = express();
 const PORT = Number(process.env.PORT) || 5020;
@@ -51,6 +52,7 @@ app.use("/api", createBook);
 app.use("/api", addBookToUser);
 app.use("/api", addBookToUser);
 app.use("/api", getUserBooks);
+app.use("/api", deleteUserBooks);
 
 ///
 

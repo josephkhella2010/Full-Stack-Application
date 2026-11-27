@@ -9,6 +9,7 @@ import { watchFetchBooks } from "./bookSaga/fetchAllBooks";
 import { watchFetchBookById } from "./bookSaga/fetchBookById";
 import { watchAddBookToUser } from "./bookSaga/fetchAddBookToUser";
 import { watchFetchUserBooks } from "./bookSaga/fetchAllBooksForUser";
+import { watchDeleteUserBook } from "./bookSaga/fetchDeleteBookFromUser";
 
 export default function* RootSaga() {
   yield all([
@@ -21,6 +22,7 @@ export default function* RootSaga() {
     watchFetchBooks(),
     watchFetchBookById(),
     watchAddBookToUser(),
-    watchFetchUserBooks()
+    watchFetchUserBooks(),
+    watchDeleteUserBook()
   ]);
 }
