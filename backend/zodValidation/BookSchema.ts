@@ -14,6 +14,7 @@ export const createBookSchema = z.object({
     .max(255, "Author cannot exceed 255 characters"),
 
   description: z.string().trim().optional(),
+  userId: z.string().trim().min(1, "User ID is required").nullable().optional(),
 });
 
 export const updateBookSchema = z
@@ -51,9 +52,19 @@ export const getBooksQuerySchema = z.object({
   dateOrder: z.enum(["asc", "desc"]).default("desc"),
   titleOrder: z.enum(["az", "za"]).default("az"),
 });
+export const bookUserIdSchema = z.object({
+  userId: z.string().trim().min(1, "User ID is required"),
+});
+
+export const addUserBookSchema = z.object({
+  bookId: z.coerce.number().int().positive("Invalid book ID"),
+  userId: z.string().trim().min(1, "User ID is required"),
+});
 
 export type CreateBookInput = z.infer<typeof createBookSchema>;
 export type UpdateBookInput = z.infer<typeof updateBookSchema>;
 export type GetBooksQueryInput = z.infer<typeof getBooksQuerySchema>;
 export type GetUserByIdInput = z.infer<typeof UserIdSchema>;
 export type GetBookByIdInput = z.infer<typeof BookIdSchema>;
+export type BookUserIdInput = z.infer<typeof bookUserIdSchema>;
+export type AddUserBookSchemaInput = z.infer<typeof addUserBookSchema>;

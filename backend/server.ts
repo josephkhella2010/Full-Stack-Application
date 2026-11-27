@@ -14,6 +14,8 @@ import updateUser from "./routes/UserRoutes/updateUser.js";
 import getAllBooks from "./routes/BookRoutes/getAllBooks.js";
 import getBookById from "./routes/BookRoutes/getBookById.js";
 import createBook from "./routes/BookRoutes/createBook.js";
+import addBookToUser from "./routes/BookRoutes/addBookToUser.js";
+import getUserBooks from "./routes/BookRoutes/getUserBooks.js";
 ///
 const app = express();
 const PORT = Number(process.env.PORT) || 5020;
@@ -46,6 +48,9 @@ app.use("/api", updateUser);
 app.use("/api", getAllBooks);
 app.use("/api", getBookById);
 app.use("/api", createBook);
+app.use("/api", addBookToUser);
+app.use("/api", addBookToUser);
+app.use("/api", getUserBooks);
 
 ///
 

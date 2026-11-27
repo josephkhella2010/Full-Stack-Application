@@ -1,7 +1,12 @@
 import { Router } from "express";
+
 import { Book } from "../../models/BookSchema.js";
-import { firebaseAuth } from "../../middleware/firebaseAuth.js";
 import { createBookSchema } from "../../zodValidation/BookSchema.js";
+
+import {
+  firebaseAuth,
+  type AuthRequest,
+} from "../../middleware/firebaseAuth.js";
 
 const router = Router();
 
@@ -13,19 +18,35 @@ router.post("/books", firebaseAuth, async (req, res) => {
     if (!validation.success) {
       return res.status(400).json({
         success: false,
-        message: validation.error.issues.map((issue) => issue.message),
+        message: "Invalid book information",
         errors: validation.error.flatten(),
       });
     }
 
-    const { title, author, description } = validation.data;
+    // Get logged-in user's Firebase UID
+    const loggedInUserId = (req as AuthRequest).auth?.payload.sub;
 
-    // Create book without assigning a user
+    if (!loggedInUserId) {
+      return res.status(401).json({
+        success: false,
+        message: "User authentication failed",
+      });
+    }
+
+    const { userId, ...bookData } = validation.data;
+
+    // Check ownership only when a userId is provided
+    if (userId && userId !== loggedInUserId) {
+      return res.status(403).json({
+        success: false,
+        message: "You can only add books to your own account",
+      });
+    }
+
+    // Create book
     const book = await Book.create({
-      title,
-      author,
-      description,
-      userId: null,
+      ...bookData,
+      userId: userId ?? null,
     });
 
     return res.status(201).json({
@@ -34,7 +55,7 @@ router.post("/books", firebaseAuth, async (req, res) => {
       book,
     });
   } catch (error) {
-    console.error("Create book error:", error);
+    console.error("Add book error:", error);
 
     return res.status(500).json({
       success: false,
