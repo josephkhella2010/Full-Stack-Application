@@ -33,10 +33,36 @@ const bookSlice = createSlice({
         state.bookById = action.payload;
       }
     },
+    setDeleteUserToBook: (state, action: PayloadAction<string>) => {
+      // Remove book from user's library
+      state.userBooks = state.userBooks.filter(
+        (book) => String(book.id) !== String(action.payload),
+      );
+
+      // Update currently selected book
+      if (
+        state.bookById &&
+        String(state.bookById.id) === String(action.payload)
+      ) {
+        state.bookById.userId = null;
+      }
+
+      // Update all books
+      state.books = state.books.map((book) =>
+        String(book.id) === String(action.payload)
+          ? { ...book, userId: null }
+          : book,
+      );
+    },
   },
 });
 
-export const { setBooks, setBookById, setBooksUser, setAddUserToBook } =
-  bookSlice.actions;
+export const {
+  setBooks,
+  setBookById,
+  setBooksUser,
+  setAddUserToBook,
+  setDeleteUserToBook,
+} = bookSlice.actions;
 
 export default bookSlice.reducer;
