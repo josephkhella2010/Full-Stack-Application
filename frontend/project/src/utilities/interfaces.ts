@@ -9,3 +9,12 @@ export interface UserType {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface BookType {
+  id: number;
+  title: string;
+  author: string;
+  description: string;
+  imgs: string[];
+  userId: null | string;
+}
